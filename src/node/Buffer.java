@@ -1,4 +1,6 @@
-class Buffer{
+package node;
+
+public class Buffer{
 	byte[] data;
 	enum Encoding{binary,ascii,utf8,hex,base64}
 	
