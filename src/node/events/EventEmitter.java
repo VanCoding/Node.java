@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
-public class EventEmitter<T extends EventEmitter<?>> implements IEventEmitter<T>{
+public class EventEmitter<T extends EventEmitter> implements IEventEmitter<T>{
 	private Map<String,ArrayList<Event>> events;
 	public EventEmitter(){ 
 		events = new HashMap<String,ArrayList<Event>>();

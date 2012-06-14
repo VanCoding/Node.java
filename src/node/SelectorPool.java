@@ -3,9 +3,7 @@ package node;
 import java.nio.channels.SelectableChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
-import java.util.HashMap;
 import java.util.Iterator;
-import java.util.Map;
 import java.util.Set;
 
 import node.events.EventEmitter;
@@ -15,7 +13,6 @@ import node.net.TcpSocket;
 public class SelectorPool{
 	private static Selector selector;
 	private static boolean started = false;
-	private static Map<SelectionKey,EventEmitter<?>> listeners;
 	
 	
 	private static void ensureStarted(){
@@ -26,12 +23,12 @@ public class SelectorPool{
 	private static void run(){
 		try{
 			selector = Selector.open();
-			listeners = new HashMap<SelectionKey,EventEmitter<?>>();
+
 			new Thread(){
 				public void run(){
 					while(true){
 						try{
-							selector.select();
+							selector.select(10);
 							Set<SelectionKey> readyKeys = selector.selectedKeys(); 
 							Iterator<SelectionKey> it = readyKeys.iterator(); 
 							
@@ -39,16 +36,20 @@ public class SelectorPool{
 							while(it.hasNext()){
 								SelectionKey sk = it.next();								
 								if(sk.isAcceptable()){
-									((TcpServer)listeners.get(sk)).emit("acceptable");
+									System.out.println("acceptable");
+									((TcpServer)sk.attachment()).emit("acceptable");
 								}
 								if(sk.isReadable()){
-									((TcpSocket)listeners.get(sk)).emit("readable");
+									System.out.println("readable");
+									((TcpSocket)sk.attachment()).emit("readable");
 								}
 								if(sk.isWritable()){
-									((TcpSocket)listeners.get(sk)).emit("writable");
+									System.out.println("writable");
+									((TcpSocket)sk.attachment()).emit("writable");
 								}
 								if(sk.isConnectable()){
-									((TcpSocket)listeners.get(sk)).emit("connectable");
+									System.out.println("connectable");
+									((TcpSocket)sk.attachment()).emit("connectable");
 								}
 								it.remove();
 							}						
@@ -62,21 +63,22 @@ public class SelectorPool{
 		}
 	}
 	
-	public static SelectionKey Add(SelectableChannel channel,EventEmitter<?> emitter, int ops){
+	public static SelectionKey Add(SelectableChannel channel,EventEmitter emitter, int ops){
 		ensureStarted();
-		try{			
+		try{
 			SelectionKey key = channel.register(selector, ops);
-			listeners.put(key, emitter);
+			key.attach(emitter);
 			return key;
 		}catch(Exception e){
+			e.printStackTrace();
 		}
 		return null;
 	}
 	
 	public static void Remove(SelectionKey key){
 		ensureStarted();
-		try{
-			listeners.remove(key);
+		try{			
+			key.cancel();
 		}catch(Exception e){		
 		}
 	}

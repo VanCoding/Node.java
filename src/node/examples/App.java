@@ -17,12 +17,23 @@ public class App{
 					}
 				});
 			}
+		}).on("error",new ErrorEvent(){
+			public void call(Exception e){
+				e.printStackTrace();
+			}
 		}).listen(70);
+
+
 		
+
 		net.connect(70).on("open", new ConnectionEvent(){
 			public void call(TcpSocket s){
 				System.out.println("connected");
 				s.write("Hello!");
+			}
+		}).on("error", new ErrorEvent(){
+			public void call(Exception e){
+				e.printStackTrace();
 			}
 		});
 		

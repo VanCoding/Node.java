@@ -11,25 +11,26 @@ import node.Buffer;
 import node.SelectorPool;
 import node.events.Event0;
 import node.events.EventEmitter;
-import node.streams.ReadStream;
-import node.streams.WriteStream;
+import node.streams.IReadStream;
+import node.streams.IWriteStream;
+import node.streams.ReadWriteStream;
 
-public class TcpSocket extends EventEmitter<TcpSocket> implements ReadStream<TcpSocket>,WriteStream<TcpSocket>{
+public class TcpSocket extends ReadWriteStream<TcpSocket>{
 	private TcpSocket self;
 	private ArrayList<Buffer> writequeue = new ArrayList<Buffer>();
-	private SelectionKey connectkey;
-	private SelectionKey readkey;
-	private SelectionKey writekey;
+	private SelectionKey key;
 	private SocketChannel channel;
 	private boolean endafterwrite = false;
+	private boolean writing = false;
 	public TcpSocket(int port, String address){
 		this.self = this;
 		try{			
 			this.on("connectable", new Event0(){
 				public void call(){
-					SelectorPool.Remove(connectkey);
+					key.interestOps(0);
 					try {
 						channel.finishConnect();
+						key.interestOps(SelectionKey.OP_READ);
 						startRead();
 					} catch (Exception e) {
 						this.emit("error",e);
@@ -41,7 +42,7 @@ public class TcpSocket extends EventEmitter<TcpSocket> implements ReadStream<Tcp
 			channel = SocketChannel.open();
 			channel.configureBlocking(false);
 			channel.connect(new InetSocketAddress(InetAddress.getByName(address),port));
-			connectkey = SelectorPool.Add(channel, this, SelectionKey.OP_CONNECT);
+			key = SelectorPool.Add(channel, this, SelectionKey.OP_CONNECT);
 			
 		}catch(Exception e){
 			
@@ -56,6 +57,7 @@ public class TcpSocket extends EventEmitter<TcpSocket> implements ReadStream<Tcp
 		try{
 			channel.configureBlocking(false);
 		}catch(Exception e){}
+		key = SelectorPool.Add(channel, this, SelectionKey.OP_READ);
 		startRead();
 			
 			
@@ -64,12 +66,12 @@ public class TcpSocket extends EventEmitter<TcpSocket> implements ReadStream<Tcp
 	private void startRead(){
 		
 		try{
-			readkey = SelectorPool.Add(channel,this,SelectionKey.OP_READ);
+
 			this.on("readable",new Event0(){
 				public void call(){
 					try{
 						ByteBuffer buffer = ByteBuffer.allocateDirect(1024);
-						((SocketChannel)readkey.channel()).read(buffer);
+						channel.read(buffer);
 						buffer.flip();
 						byte[] buf = new byte[buffer.remaining()];
 						buffer.get(buf);
@@ -81,13 +83,14 @@ public class TcpSocket extends EventEmitter<TcpSocket> implements ReadStream<Tcp
 				}
 			}).on("writable",new Event0(){
 				public void call(){
+					System.out.println("writable");
 					try{
 						if(writequeue.size() > 0){
 							channel.write(ByteBuffer.wrap((writequeue.get(0).array())));
 							writequeue.remove(0);
 						}else{
-							SelectorPool.Remove(writekey);
-							writekey = null;
+							writing = false;
+							key.interestOps(SelectionKey.OP_READ);
 							if(endafterwrite){
 								destroy();
 							}
@@ -107,34 +110,24 @@ public class TcpSocket extends EventEmitter<TcpSocket> implements ReadStream<Tcp
 	private void close(){
 		try{
 			channel.close();
-			SelectorPool.Remove(readkey);
-			if(writekey != null){
-				SelectorPool.Remove(writekey);
-			}
+			SelectorPool.Remove(key);
 			this.emit("end");
 			this.emit("close");
 		}catch(Exception e){
 		}
 		
 		channel = null;
-		connectkey = null;
-		readkey = null;
-		writekey = null;
+		key = null;
 		writequeue = null;
 		self = null;
 	}
 	
 	public void write(Buffer b){
 		writequeue.add(b);
-		if(writekey == null){
-			writekey = SelectorPool.Add(channel, this, SelectionKey.OP_WRITE);
+		if(!writing){
+			key.interestOps(SelectionKey.OP_WRITE|SelectionKey.OP_READ);
+			writing = true;
 		}
-	}
-	public void write(String data, String encoding){
-		write(new Buffer(data,encoding));
-	}
-	public void write(String data){
-		write(new Buffer(data));
 	}
 	
 	public void end(){
@@ -145,31 +138,7 @@ public class TcpSocket extends EventEmitter<TcpSocket> implements ReadStream<Tcp
 		}
 	}
 	
-	public void end(Buffer data){
-		write(data);
-		end();
-	}
-	public void end(String data, String encoding){
-		write(data,encoding);
-		end();
-	}
-	public void end(String data){
-		write(data);
-		end();
-	}	
 	public void destroy(){
 		close();
 	}
-
-	public void pipe(final WriteStream ws) {
-		this.on("data", new DataEvent(){
-			public void call(Buffer b){
-				ws.write(b);
-			}
-		}).on("end", new Event0(){
-			public void call(){
-				ws.end();
-			}
-		});
-	}	
 }

@@ -35,7 +35,7 @@ public class TcpServer extends EventEmitter<TcpServer> {
 			try{			
 				channel = ServerSocketChannel.open();
 				channel.configureBlocking(false);
-				channel.socket().bind(new InetSocketAddress(InetAddress.getByName("localhost"),port));			
+				channel.socket().bind(new InetSocketAddress(InetAddress.getByName("localhost"),port));
 				acceptkey = SelectorPool.Add(channel, this,SelectionKey.OP_ACCEPT);
 			}catch(Exception e){
 				this.emit("error",e);
