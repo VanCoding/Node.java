@@ -36,19 +36,15 @@ public class SelectorPool{
 							while(it.hasNext()){
 								SelectionKey sk = it.next();								
 								if(sk.isAcceptable()){
-									System.out.println("acceptable");
 									((TcpServer)sk.attachment()).emit("acceptable");
 								}
 								if(sk.isReadable()){
-									System.out.println("readable");
 									((TcpSocket)sk.attachment()).emit("readable");
 								}
 								if(sk.isWritable()){
-									System.out.println("writable");
 									((TcpSocket)sk.attachment()).emit("writable");
 								}
 								if(sk.isConnectable()){
-									System.out.println("connectable");
 									((TcpSocket)sk.attachment()).emit("connectable");
 								}
 								it.remove();

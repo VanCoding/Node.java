@@ -83,7 +83,6 @@ public class TcpSocket extends ReadWriteStream<TcpSocket>{
 				}
 			}).on("writable",new Event0(){
 				public void call(){
-					System.out.println("writable");
 					try{
 						if(writequeue.size() > 0){
 							channel.write(ByteBuffer.wrap((writequeue.get(0).array())));
