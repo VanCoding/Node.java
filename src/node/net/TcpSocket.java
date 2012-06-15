@@ -8,6 +8,7 @@ import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
 
 import node.Buffer;
+import node.Processable;
 import node.SelectorPool;
 import node.events.Event0;
 import node.events.EventEmitter;
@@ -15,7 +16,7 @@ import node.streams.IReadStream;
 import node.streams.IWriteStream;
 import node.streams.ReadWriteStream;
 
-public class TcpSocket extends ReadWriteStream<TcpSocket>{
+public class TcpSocket extends ReadWriteStream<TcpSocket> implements Processable{
 	private TcpSocket self;
 	private ArrayList<Buffer> writequeue = new ArrayList<Buffer>();
 	private SelectionKey key;
@@ -24,20 +25,7 @@ public class TcpSocket extends ReadWriteStream<TcpSocket>{
 	private boolean writing = false;
 	public TcpSocket(int port, String address){
 		this.self = this;
-		try{			
-			this.on("connectable", new Event0(){
-				public void call(){
-					key.interestOps(0);
-					try {
-						channel.finishConnect();
-						key.interestOps(SelectionKey.OP_READ);
-						startRead();
-					} catch (Exception e) {
-						this.emit("error",e);
-						close();
-					}
-				}
-			});
+		try{
 			
 			channel = SocketChannel.open();
 			channel.configureBlocking(false);
@@ -58,60 +46,99 @@ public class TcpSocket extends ReadWriteStream<TcpSocket>{
 			channel.configureBlocking(false);
 		}catch(Exception e){}
 		key = SelectorPool.Add(channel, this, SelectionKey.OP_READ);
-		startRead();
-			
-			
+		
+		emitOpen();		
 	}
 	
-	private void startRead(){
-		
-		try{
+	private void emitOpen(){
+		SelectorPool.queue(new Event0(){
+			public void call(){
+				self.emit("open",self);
+			}
+		});
+	}
+	private void emitError(final Exception e){
+		SelectorPool.queue(new Event0(){
+			public void call(){
+				self.emit("error",e);
+			}
+		});
+	}
+	private void emitData(final Buffer b){
+		SelectorPool.queue(new Event0(){
+			public void call(){
+				self.emit("data",b);
+			}
+		});
+	}
+	private void emitEnd(){
+		SelectorPool.queue(new Event0(){
+			public void call(){
+				self.emit("end");
+			}
+		});
+	}
+	private void emitClose(){
+		SelectorPool.queue(new Event0(){
+			public void call(){
+				self.emit("close");
+			}
+		});
+	}
+	
 
-			this.on("readable",new Event0(){
-				public void call(){
-					try{
-						ByteBuffer buffer = ByteBuffer.allocateDirect(1024);
-						channel.read(buffer);
-						buffer.flip();
-						byte[] buf = new byte[buffer.remaining()];
-						buffer.get(buf);
-						self.emit("data",new Buffer(buf));
-					}catch(Exception e){
-						close();
-					}
+	public void process() {	
+			if(key.isConnectable()){
+				key.interestOps(0);
+				try {
+					channel.finishConnect();
+					key.interestOps(SelectionKey.OP_READ);
+					emitOpen();
+				} catch (Exception e) {
+					emitError(e);
+					close();
+				}
+			}
+
+			if(key.isReadable()){
+				try{
+					ByteBuffer buffer = ByteBuffer.allocateDirect(1024);
+					channel.read(buffer);
+					buffer.flip();
+					byte[] buf = new byte[buffer.remaining()];
+					buffer.get(buf);
 					
+					emitData(new Buffer(buf));
+				}catch(Exception e){
+					close();
 				}
-			}).on("writable",new Event0(){
-				public void call(){
-					try{
-						if(writequeue.size() > 0){
-							channel.write(ByteBuffer.wrap((writequeue.get(0).array())));
-							writequeue.remove(0);
-						}else{
-							writing = false;
-							key.interestOps(SelectionKey.OP_READ);
-							if(endafterwrite){
-								destroy();
-							}
+			}
+			if(key.isWritable()){
+				try{
+					if(writequeue.size() > 0){
+						channel.write(ByteBuffer.wrap((writequeue.get(0).array())));
+						writequeue.remove(0);
+					}else{
+						writing = false;
+						key.interestOps(SelectionKey.OP_READ);
+						if(endafterwrite){
+							destroy();
 						}
-					}catch(Exception e){
-						e.printStackTrace();
-						self.emit("error",e);
-						close();
 					}
+				}catch(Exception e){
+					emitError(e);
+					close();
 				}
-			});
-		}catch(Exception e){			
-		}
-		this.emit("open",this);
+			}
+
 	}
 	
 	private void close(){
 		try{
 			channel.close();
 			SelectorPool.Remove(key);
-			this.emit("end");
-			this.emit("close");
+			emitEnd();
+			emitClose();
 		}catch(Exception e){
 		}
 		
@@ -140,4 +167,5 @@ public class TcpSocket extends ReadWriteStream<TcpSocket>{
 	public void destroy(){
 		close();
 	}
+
 }

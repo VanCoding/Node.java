@@ -4,8 +4,11 @@ import java.nio.channels.SelectableChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.Queue;
 import java.util.Set;
 
+import node.events.Event0;
 import node.events.EventEmitter;
 import node.net.TcpServer;
 import node.net.TcpSocket;
@@ -13,6 +16,7 @@ import node.net.TcpSocket;
 public class SelectorPool{
 	private static Selector selector;
 	private static boolean started = false;
+	private static Queue<Event0> queue = new LinkedList<Event0>();
 	
 	
 	private static void ensureStarted(){
@@ -28,27 +32,25 @@ public class SelectorPool{
 				public void run(){
 					while(true){
 						try{
-							selector.select(10);
+							boolean sleep = true;
+							selector.selectNow();
 							Set<SelectionKey> readyKeys = selector.selectedKeys(); 
-							Iterator<SelectionKey> it = readyKeys.iterator(); 
-							
+							Iterator<SelectionKey> it = readyKeys.iterator();							
 							
 							while(it.hasNext()){
-								SelectionKey sk = it.next();								
-								if(sk.isAcceptable()){
-									((TcpServer)sk.attachment()).emit("acceptable");
-								}
-								if(sk.isReadable()){
-									((TcpSocket)sk.attachment()).emit("readable");
-								}
-								if(sk.isWritable()){
-									((TcpSocket)sk.attachment()).emit("writable");
-								}
-								if(sk.isConnectable()){
-									((TcpSocket)sk.attachment()).emit("connectable");
-								}
+								sleep = false;
+								((Processable)it.next().attachment()).process();
 								it.remove();
-							}						
+							}
+							while(!queue.isEmpty()){
+								sleep = false;
+								queue.remove().call();
+							}
+							
+							if(sleep){
+								Thread.sleep(1);
+							}							
+							
 						}catch(Exception e){
 						}						
 					}
@@ -59,7 +61,7 @@ public class SelectorPool{
 		}
 	}
 	
-	public static SelectionKey Add(SelectableChannel channel,EventEmitter emitter, int ops){
+	public static SelectionKey Add(SelectableChannel channel,Processable emitter, int ops){
 		ensureStarted();
 		try{
 			SelectionKey key = channel.register(selector, ops);
@@ -70,12 +72,15 @@ public class SelectorPool{
 		}
 		return null;
 	}
-	
 	public static void Remove(SelectionKey key){
 		ensureStarted();
 		try{			
 			key.cancel();
 		}catch(Exception e){		
 		}
+	}
+	public static void queue(Event0 e){
+		ensureStarted();
+		queue.add(e);
 	}
 }
