@@ -37,7 +37,7 @@ public class SelectorPool{
 							Set<SelectionKey> readyKeys = selector.selectedKeys(); 
 							Iterator<SelectionKey> it = readyKeys.iterator();							
 							
-							while(it.hasNext()){
+							while(it.hasNext()){		
 								sleep = false;
 								((Processable)it.next().attachment()).process();
 								it.remove();

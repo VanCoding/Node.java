@@ -5,7 +5,7 @@ import node.*;
 import node.events.Event0;
 import node.net.*;
 
-public class App{	
+public class EchoServer{	
 	public static void main(String[] args){
 		
 		

@@ -88,49 +88,52 @@ public class TcpSocket extends ReadWriteStream<TcpSocket> implements Processable
 	
 
 	public void process() {	
-			if(key.isConnectable()){
-				key.interestOps(0);
-				try {
-					channel.finishConnect();
-					key.interestOps(SelectionKey.OP_READ);
-					emitOpen();
-				} catch (Exception e) {
-					emitError(e);
-					close();
-				}
+		
+		if(key.isConnectable()){
+			key.interestOps(0);
+			try {
+				channel.finishConnect();
+				key.interestOps(SelectionKey.OP_READ);
+				emitOpen();
+			} catch (Exception e) {
+				emitError(e);
+				close();
 			}
+		}
 
-			if(key.isReadable()){
-				try{
-					ByteBuffer buffer = ByteBuffer.allocateDirect(1024);
-					channel.read(buffer);
-					buffer.flip();
-					byte[] buf = new byte[buffer.remaining()];
-					buffer.get(buf);
-					
+		if(key.isReadable()){
+			try{
+				ByteBuffer buffer = ByteBuffer.allocateDirect(1024);
+				channel.read(buffer);
+				buffer.flip();
+				byte[] buf = new byte[buffer.remaining()];
+				buffer.get(buf);
+				if(buf.length > 0){
 					emitData(new Buffer(buf));
-				}catch(Exception e){
+				}else{
 					close();
 				}
+			}catch(Exception e){
+				close();
 			}
-			if(key.isWritable()){
-				try{
-					if(writequeue.size() > 0){
-						channel.write(ByteBuffer.wrap((writequeue.get(0).array())));
-						writequeue.remove(0);
-					}else{
-						writing = false;
-						key.interestOps(SelectionKey.OP_READ);
-						if(endafterwrite){
-							destroy();
-						}
+		}
+		if(key.isWritable()){
+			try{
+				if(writequeue.size() > 0){
+					channel.write(ByteBuffer.wrap((writequeue.get(0).array())));
+					writequeue.remove(0);
+				}else{
+					writing = false;
+					key.interestOps(SelectionKey.OP_READ);
+					if(endafterwrite){
+						destroy();
 					}
-				}catch(Exception e){
-					emitError(e);
-					close();
 				}
+			}catch(Exception e){
+				emitError(e);
+				close();
 			}
-
+		}
 	}
 	
 	private void close(){
@@ -139,7 +142,9 @@ public class TcpSocket extends ReadWriteStream<TcpSocket> implements Processable
 			SelectorPool.Remove(key);
 			emitEnd();
 			emitClose();
+			this.clearListeners();
 		}catch(Exception e){
+			System.out.println("not able to close");
 		}
 		
 		channel = null;
